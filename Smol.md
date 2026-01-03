@@ -1,25 +1,3 @@
-¡Entendido! El problema más probable es que, dependiendo de dónde estés visualizando el archivo Markdown (GitHub, VS Code, un navegador web), los espacios en blanco en los nombres de archivo (como en "Pasted image...") rompen el enlace si no están codificados.
-
-La solución estándar es reemplazar los espacios por %20 en las rutas de las imágenes.
-
-Aquí tienes la versión corregida con las rutas codificadas para URL.
-
-Requisitos previos para que esto funcione:
-
-Debes tener la siguiente estructura de carpetas exacta en tu computadora:
-Plaintext
-
-TU_CARPETA_DEL_PROYECTO/
-│
-├── tu_archivo_writeup.md  <-- (Este es el archivo donde pegas el código de abajo)
-│
-└── images/                <-- (Esta carpeta debe estar al lado del archivo .md)
-    ├── Pasted image 20260102191827.png
-    ├── Pasted image 20260102191945.png
-    └── ... (el resto de tus imágenes)
-
-Copia y pega el siguiente contenido en tu archivo .md:
-Markdown
 
 # Writeup: Máquina Smol
 
