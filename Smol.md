@@ -1,117 +1,179 @@
-Reconocimiento
-![[Pasted image 20260102191827.png]]
-Tenemos el puerto 22 y 80, al parecer el puerto 80 nos esta redirigiendo a una pagina web llamada smol.thm y como nuestro sistema no sabe que es smol.thm lo tenemos que escribir en el /etc/hosts 
 
-![[Pasted image 20260102191945.png]]
-Aqui tenemos la pagina web 
+# Writeup: Smol (TryHackMe)
 
-![[Pasted image 20260102192008.png]]
-con wappalyzer nos muesstra que tenemos un wordpress corriendo 
+**Autor:** JhonatanHck  
+**Fecha:** 03/01/2026  
+**Categoría:** Linux / Web / PrivEsc
 
-![[Pasted image 20260102192343.png]]
-con gobuster encontre estos directorios pero no hay nada interesante dentro de ellos asi que voy a hacer uso de otra herramienta llamada wpscan
+---
 
-![[Pasted image 20260102192612.png]]
-con wpscan encontre este plugin que es vulnerable a LFI
+## 1. Reconocimiento y Enumeración
 
-![[Pasted image 20260102193146.png]]
-dentro de esa ruta podemos encontrar este archivo .php que puede que nos permita tener LFI
+Iniciamos con un escaneo de puertos para identificar servicios activos.
 
-![[Pasted image 20260102193917.png]]
-Investiigando un poco encontre que poniendo esta query en la url podemos ver los datos de wp-config
+![Escaneo de puertos](images/Pasted%20image%2020260102191827.png)
 
-![[Pasted image 20260102194001.png]]
-y efectivamente, aqui tenemos las credenciales
+Detectamos los puertos **22 (SSH)** y **80 (HTTP)** abiertos. Al intentar acceder al puerto 80, el servidor nos redirige al dominio `smol.thm`. Como nuestro sistema no resuelve este dominio por defecto, debemos añadirlo a nuestro archivo `/etc/hosts`.
 
-![[Pasted image 20260102194105.png]]
-y asi estamos dentro del wp-admin
+![Edición de hosts](images/Pasted%20image%2020260102191945.png)
 
+Una vez configurado, podemos visualizar la página web:
 
-![[Pasted image 20260102194503.png]]
-encontre esta pista que parece que hay una vulnerabilidad con el plugin hello dolly
+![Página web principal](images/Pasted%20image%2020260102192008.png)
 
-![[Pasted image 20260102194926.png]]
-usando nuestra vulnerabilidad LFI que use anteriormente la utilice para ver el codigo del plugin hello dolly y revisando encontre esta cadena en base64 que es esto
+Utilizando **Wappalyzer**, confirmamos que el sitio está corriendo sobre **WordPress**.
 
-![[Pasted image 20260102195028.png]]
-bisicamente podemos ejecutar comandos
+![Wappalyzer](images/Pasted%20image%2020260102192343.png)
 
-![[Pasted image 20260102195143.png]]
-volvi al dashboard y poniendo ?cmd=id arriba podemos ver que nos pone www-data asi que tenemos RCE 
+Realicé una enumeración de directorios con **Gobuster**, pero no arrojó resultados críticos. Procedí a enumerar vulnerabilidades específicas de WordPress utilizando **WPScan**.
 
-![[Pasted image 20260102200311.png]]
-Yo voy a utilizar este payload urlencoded para conseguir mi reverse shell
+![WPScan result](images/Pasted%20image%2020260102192612.png)
 
-![[Pasted image 20260102195323.png]]
-nos ponemos en escucha
+WPScan detectó un plugin instalado que es vulnerable a **LFI (Local File Inclusion)**.
 
-![[Pasted image 20260102200349.png]]
-y ya estamos dentro
+---
 
-![[Pasted image 20260102200539.png]]
-Dentro del directorio home tenemos varios usuarios 
+## 2. Explotación Web (LFI a RCE)
 
-![[Pasted image 20260102201245.png]]
-Con las credenciales que encontramos anteriormente pude entrar en la base de datos de wp
+Navegando a la ruta del plugin vulnerable, encontramos un archivo `.php` que permite la inclusión de archivos locales del servidor.
 
-![[Pasted image 20260102201459.png]]
-aqui tenemos las credenciales de los usuarios 
+![Vulnerabilidad LFI](images/Pasted%20image%2020260102193146.png)
 
-![[Pasted image 20260102202124.png]]
-guarde los usuarios en este formato para crackearlos con john
+Investigando vectores de ataque, encontré que utilizando wrappers de PHP en la query de la URL, es posible extraer el contenido de archivos sensibles como `wp-config.php`.
 
-![[Pasted image 20260102202446.png]]
-aqui john encontro la contrasena para el usuario diego asi que la voy a probar inmediatamente
+![Query LFI](images/Pasted%20image%2020260102193917.png)
 
-![[Pasted image 20260102202526.png]]
-y ya estamos dentro de diego
+La inyección fue exitosa y logramos leer las credenciales de la base de datos dentro del archivo de configuración.
 
-![[Pasted image 20260102203405.png]]
-dentro del directorio de think vemos que tiene un directorio .ssh que tal vez tenga el id_rsa para poder transformarnos como think
+![Credenciales wp-config](images/Pasted%20image%2020260102194001.png)
 
-![[Pasted image 20260102203456.png]]
-Y efectivamente aqui tenemos el id_rsa
+Con estas credenciales, logramos acceder al panel de administración `wp-admin`.
 
-![[Pasted image 20260102203558.png]]
-Y ya estamos dentro de think
+![Dashboard WordPress](images/Pasted%20image%2020260102194105.png)
 
-![[Pasted image 20260102205842.png]]
-revisando esta ruta que vi en linpeas parece que hay una regla escrita 
-![[Pasted image 20260102210010.png]]
-esto es lo que hace esa regla, basicamente es, Si el usuario think intenta convertirse en gege, déjalo pasar inmediatamente sin pedir contraseña
+Dentro del panel, encontré una pista que sugiere una vulnerabilidad en el plugin **Hello Dolly**.
 
-![[Pasted image 20260102205412.png]]
-y asi con su - gege pude transformarme en gege
+![Pista Hello Dolly](images/Pasted%20image%2020260102194503.png)
 
-![[Pasted image 20260102210116.png]]
-ahora puedo trabajar con este archivo que habia visto antes me lo voy llevar a mi maquina para examinarlo 
+Usando la vulnerabilidad LFI anterior, leí el código fuente del plugin Hello Dolly y encontré una cadena en base64 sospechosa.
 
-![[Pasted image 20260102210333.png]]
-asi que voy a intentar con zip2john para ver si puedo descifrar la contrasena 
+![Código base64](images/Pasted%20image%2020260102194926.png)
 
-![[Pasted image 20260102210637.png]]
-y aqui john nos acaba de dar la contrasena para el archivo
+Al decodificarla, confirmamos que el código permite la ejecución de comandos arbitrarios.
 
-![[Pasted image 20260102210801.png]]
-aqui tenemos el directorio que descomprimi
+![Decodificación](images/Pasted%20image%2020260102195028.png)
 
-![[Pasted image 20260102211241.png]]
-en este archivo encontramos las credenciales para convertirnos en xavi
+Para probarlo, volví al dashboard e inyecté `?cmd=id` en la URL. El sistema respondió con el usuario `www-data`, confirmando que tenemos **RCE (Remote Code Execution)**.
 
-![[Pasted image 20260102211325.png]]
-ya estamos dentro de xavi 
+![Prueba de RCE](images/Pasted%20image%2020260102195143.png)
 
-![[Pasted image 20260102211405.png]]
-y estando como xavi me fijo que puedo ejecutar cualquier comando como root
+---
 
-![[Pasted image 20260102211458.png]]
-ahora al ejecutar este comando nos transformaremos en root
+## 3. Acceso Inicial (Reverse Shell)
 
-![[Pasted image 20260102211525.png]]
-y ya somos root, PWNED
+Para conseguir una reverse shell estable, utilicé el siguiente payload URL-encoded:
 
-![[Pasted image 20260102211624.png]]
-Aqui esta la flag
+![Payload Reverse Shell](images/Pasted%20image%2020260102200311.png)
+
+Preparamos el listener con Netcat:
+
+![Netcat listening](images/Pasted%20image%2020260102195323.png)
+
+Ejecutamos el payload en el navegador y obtenemos acceso a la terminal.
+
+![Shell obtenida](images/Pasted%20image%2020260102200349.png)
+
+---
+
+## 4. Movimiento Lateral
+
+Revisando el directorio `/home`, identificamos varios usuarios en el sistema.
+
+![Usuarios home](images/Pasted%20image%2020260102200539.png)
+
+Reutilizando las credenciales encontradas previamente en el `wp-config.php`, accedí a la base de datos MySQL de WordPress.
+
+![Acceso MySQL](images/Pasted%20image%2020260102201245.png)
+
+Extraje los hashes de las contraseñas de los usuarios registrados.
+
+![Hashes usuarios](images/Pasted%20image%2020260102201459.png)
+
+Guardé los usuarios y hashes en un formato apto para ser procesados por **John the Ripper**.
+
+![Formato hash](images/Pasted%20image%2020260102202124.png)
+
+John logró crackear la contraseña para el usuario **diego**.
+
+![John the Ripper result](images/Pasted%20image%2020260102202446.png)
+
+Con esta contraseña, migramos de usuario `www-data` a **diego**.
+
+![Login diego](images/Pasted%20image%2020260102202526.png)
+
+### Escalando a usuario 'think'
+
+Enumerando el sistema, encontramos que el usuario **think** tiene su directorio `.ssh` con permisos de lectura.
+
+![Directorio think](images/Pasted%20image%2020260102203405.png)
+
+Dentro encontramos su clave privada `id_rsa`.
+
+![id_rsa think](images/Pasted%20image%2020260102203456.png)
+
+Usamos la clave para conectarnos por SSH como **think**.
+
+![Login think](images/Pasted%20image%2020260102203558.png)
+
+### Escalando a usuario 'gege'
+
+Revisando una ruta inusual señalada por LinPEAS, descubrí una configuración de seguridad específica.
+
+![Ruta sospechosa](images/Pasted%20image%2020260102205842.png)
+
+El archivo indica una regla: *"Si el usuario think intenta convertirse en gege, déjalo pasar inmediatamente sin pedir contraseña"*.
+
+![Regla cat](images/Pasted%20image%2020260102210010.png)
+
+Ejecutamos `su - gege` y logramos acceder sin password.
+
+![Login gege](images/Pasted%20image%2020260102205412.png)
+
+---
+
+## 5. Escalada de Privilegios (Root)
+
+Como usuario `gege`, tuve acceso a un archivo comprimido sospechoso. Lo transferí a mi máquina local para analizarlo.
+
+![Transferencia archivo](images/Pasted%20image%2020260102210116.png)
+
+Utilicé `zip2john` para extraer el hash del archivo ZIP.
+
+![zip2john](images/Pasted%20image%2020260102210333.png)
+
+John the Ripper nos entregó la contraseña del archivo comprimido.
+
+![Password zip](images/Pasted%20image%2020260102210637.png)
+
+Al descomprimirlo, encontramos un archivo de texto con credenciales para el usuario **xavi**.
+
+![Credenciales xavi](images/Pasted%20image%2020260102211241.png)
+
+Accedemos como xavi.
+
+![Login xavi](images/Pasted%20image%2020260102211325.png)
+
+Finalmente, revisando los permisos de sudo (`sudo -l`), descubrí que xavi tiene permisos para ejecutar cualquier comando como root (`ALL=(ALL:ALL) ALL`).
+
+![Sudoers xavi](images/Pasted%20image%2020260102211405.png)
+
+Ejecutamos `sudo su` para obtener una shell como root.
+
+![Escalada root](images/Pasted%20image%2020260102211525.png)
+
+**¡Máquina PWNED!**
+
+![Flag](images/Pasted%20image%2020260102211624.png)
 
 # Que aprendi
 
